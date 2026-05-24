@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+
+# Logs
+*.log
+nohup.out
+
+# Virtual environment (install separately — see README)
+venv/
+env/
+*/envs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+
+# Claude internal state
+.claude/

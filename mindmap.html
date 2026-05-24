@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheme Mind Map — Gov Tracker</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #c9d1d9;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  display: flex; height: 100vh; overflow: hidden;
+}
+
+/* ── LEFT: map pane ── */
+#map-pane { flex: 0 0 60%; height: 100vh; position: relative; border-right: 1px solid #21262d; }
+#map-svg  { width: 100%; height: 100%; display: block; }
+
+.link { stroke: #30363d; stroke-width: 1.5; fill: none; opacity: 0.5; }
+.node { cursor: pointer; }
+.node circle { stroke-width: 2.5; }
+.node:hover circle { filter: brightness(1.3) drop-shadow(0 0 8px currentColor); }
+.node.selected circle { stroke-width: 4; filter: brightness(1.35) drop-shadow(0 0 14px currentColor); }
+.node text { pointer-events: none; text-anchor: middle; dominant-baseline: middle; }
+
+/* Top bar */
+#topbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 46px;
+  background: rgba(13,17,23,0.9); backdrop-filter: blur(8px);
+  border-bottom: 1px solid #21262d; display: flex;
+  align-items: center; padding: 0 14px; gap: 10px; z-index: 20;
+}
+#topbar a { color: #58a6ff; font-size: 0.82em; text-decoration: none; white-space: nowrap; }
+#topbar a:hover { text-decoration: underline; }
+#topbar h1 { font-size: 0.9em; font-weight: 600; color: #e6edf3; white-space: nowrap; }
+.ctrl-btn {
+  background: #21262d; border: 1px solid #30363d; color: #c9d1d9;
+  padding: 4px 10px; border-radius: 6px; font-size: 0.77em; cursor: pointer; white-space: nowrap;
+}
+.ctrl-btn:hover { background: #30363d; }
+.topbar-hint { margin-left: auto; color: #8892b0; font-size: 0.73em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Legend */
+#legend {
+  position: absolute; bottom: 14px; left: 14px;
+  background: rgba(22,27,34,0.93); border: 1px solid #21262d;
+  border-radius: 8px; padding: 9px 13px; font-size: 0.73em; z-index: 20;
+}
+.leg { display: flex; align-items: center; gap: 7px; margin: 2px 0; color: #8892b0; }
+.leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── RIGHT: detail pane ── */
+#detail-pane {
+  flex: 1; height: 100vh; overflow-y: auto; padding: 22px 20px; background: #0d1117;
+}
+#detail-pane::-webkit-scrollbar { width: 4px; }
+#detail-pane::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+
+/* Panel common */
+.panel-empty { color: #8892b0; text-align: center; padding: 70px 20px 30px; }
+.panel-empty .icon { font-size: 2.6em; margin-bottom: 10px; }
+.panel-empty p { font-size: 0.86em; line-height: 1.7; }
+.panel-empty strong { color: #e6edf3; }
+
+.breadcrumb { display: flex; align-items: center; gap: 5px; font-size: 0.75em; color: #8892b0; margin-bottom: 14px; flex-wrap: wrap; }
+.breadcrumb .bc-item { color: #58a6ff; cursor: pointer; }
+.breadcrumb .bc-item:hover { text-decoration: underline; }
+.breadcrumb .sep { color: #30363d; }
+
+.scheme-badge {
+  display: inline-block; font-size: 0.7em; font-weight: 600;
+  padding: 2px 8px; border-radius: 4px; margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.panel-title   { font-size: 1.4em; font-weight: 700; color: #e6edf3; line-height: 1.2; }
+.panel-sub     { color: #8892b0; font-size: 0.82em; margin-top: 3px; }
+.sec-label {
+  font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px;
+  color: #8892b0; margin: 20px 0 7px; border-bottom: 1px solid #21262d; padding-bottom: 5px;
+}
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 7px 0; }
+.stat-box  { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 11px 13px; }
+.stat-val  { font-size: 1.15em; font-weight: 700; color: #e6edf3; }
+.stat-val.red    { color: #e94560; }
+.stat-val.green  { color: #3fb950; }
+.stat-val.yellow { color: #e3b341; }
+.stat-lbl  { font-size: 0.73em; color: #8892b0; margin-top: 2px; }
+
+.util-wrap { margin: 9px 0 15px; }
+.util-row  { display: flex; justify-content: space-between; font-size: 0.78em; margin-bottom: 4px; }
+.util-track { background: #21262d; border-radius: 5px; height: 9px; overflow: hidden; }
+.util-fill  { height: 9px; border-radius: 5px; transition: width 0.5s ease; }
+
+.officer-card {
+  background: #161b22; border: 1px solid #21262d; border-radius: 8px;
+  padding: 12px 14px; margin: 6px 0; display: flex; align-items: flex-start; gap: 10px;
+}
+.officer-av   { width: 36px; height: 36px; border-radius: 50%; background: #21262d; display: flex; align-items: center; justify-content: center; font-size: 1em; flex-shrink: 0; }
+.officer-name { font-size: 0.9em; font-weight: 600; color: #58a6ff; }
+.officer-role { font-size: 0.73em; color: #8892b0; margin-top: 1px; line-height: 1.4; }
+.officer-dept { font-size: 0.7em; color: #6e7681; margin-top: 3px; }
+
+.kpi-list  { list-style: none; margin: 3px 0; }
+.kpi-list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 0.83em; }
+.kpi-list li:last-child { border-bottom: none; }
+.kpi-k { color: #8892b0; }
+.kpi-v { font-weight: 600; color: #e6edf3; }
+
+.flag-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 4px; font-size: 0.76em; margin: 2px 2px 2px 0; font-weight: 500; }
+.flag-CRITICAL { background: #2d1b1b; border: 1px solid #e94560; color: #e94560; }
+.flag-HIGH     { background: #2d2215; border: 1px solid #e3813e; color: #e3813e; }
+.flag-MEDIUM   { background: #2d2d15; border: 1px solid #e3b341; color: #e3b341; }
+
+.no-data-box {
+  background: #161b22; border: 1px dashed #30363d; border-radius: 8px;
+  padding: 14px 16px; text-align: center; color: #8892b0; font-size: 0.82em; margin: 8px 0; line-height: 1.6;
+}
+.no-data-box .nd-icon { font-size: 1.4em; margin-bottom: 4px; }
+.no-data-box strong { color: #e6edf3; }
+
+.expand-hint { background: #161b22; border: 1px dashed #30363d; border-radius: 8px; padding: 10px 13px; font-size: 0.8em; color: #8892b0; text-align: center; margin-top: 10px; }
+.expand-hint strong { color: #58a6ff; }
+
+.spinner { width: 15px; height: 15px; border: 2px solid #21262d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="map-pane">
+  <div id="topbar">
+    <a href="dashboard.html">← Dashboard</a>
+    <h1>Scheme Mind Map</h1>
+    <button class="ctrl-btn" onclick="collapseAll()">Collapse All</button>
+    <button class="ctrl-btn" onclick="resetZoom()">Reset View</button>
+    <span class="topbar-hint">Click any node to expand · Drag to reposition · Scroll to zoom</span>
+  </div>
+  <svg id="map-svg"></svg>
+  <div id="legend">
+    <div class="leg"><div class="leg-dot" style="background:#ff6b6b"></div>NREGA</div>
+    <div class="leg"><div class="leg-dot" style="background:#4ecdc4"></div>PM-JAY</div>
+    <div class="leg"><div class="leg-dot" style="background:#ffd93d"></div>PM-KISAN</div>
+    <div class="leg"><div class="leg-dot" style="background:#6bcb77"></div>PMAY-U</div>
+    <div class="leg"><div class="leg-dot" style="background:#ff9671"></div>PM Ujjwala</div>
+    <div class="leg"><div class="leg-dot" style="background:#74b9ff"></div>Jal Jeevan</div>
+    <div class="leg"><div class="leg-dot" style="background:#a29bfe"></div>State</div>
+    <div class="leg"><div class="leg-dot" style="background:#55efc4"></div>District ≥80%</div>
+    <div class="leg"><div class="leg-dot" style="background:#fdcb6e"></div>District 60-80%</div>
+    <div class="leg"><div class="leg-dot" style="background:#e94560"></div>District &lt;60%</div>
+    <div class="leg"><div class="leg-dot" style="background:#b2bec3"></div>Block / Village</div>
+    <div class="leg"><div class="leg-dot" style="background:#636e72;opacity:0.4"></div>No data yet</div>
+  </div>
+</div>
+
+<div id="detail-pane">
+  <div id="panel">
+    <div class="panel-empty">
+      <div class="icon">🗺️</div>
+      <p>Select any node to see details here.<br><br>
+        <strong>Scheme</strong> → expand states<br>
+        <strong>State</strong> → expand districts<br>
+        <strong>District</strong> → expand blocks<br>
+        <strong>Block</strong> → villages &amp; beneficiaries<br><br>
+        <span style="font-size:0.88em">Nodes with no data are shown with dashed outline — data will appear once scraped.</span>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:5000';
+
+// ── colour palette ──────────────────────────────────────────────────
+const SCHEME_COLOR = {
+  'NREGA':'#ff6b6b', 'PM-JAY':'#4ecdc4', 'PM-KISAN':'#ffd93d',
+  'PMAY-U':'#6bcb77', 'PM Ujjwala':'#ff9671', 'Jal Jeevan Mission':'#74b9ff',
+};
+function schemeColor(n) { return SCHEME_COLOR[n] || '#8892b0'; }
+function utilColor(p)   { return p >= 80 ? '#3fb950' : p >= 60 ? '#e3b341' : '#e94560'; }
+function distColor(u)   { return !u ? '#b2bec3' : u >= 80 ? '#55efc4' : u >= 60 ? '#fdcb6e' : '#e94560'; }
+
+// ── node geometry ───────────────────────────────────────────────────
+const NODE_R = { scheme: 52, state: 26, district: 17, block: 12, village: 9, user: 7 };
+
+function nodeR(d)       { return NODE_R[d.type] || 10; }
+function nodeColor(d) {
+  if (d.type === 'scheme')   return schemeColor(d.name);
+  if (d.type === 'state')    return '#a29bfe';
+  if (d.type === 'district') return distColor(d.data && d.data.utilization_pct);
+  return '#b2bec3';
+}
+function nodeFill(d) {
+  if (d._noData) return '#1a1f24'; // probed, no children
+  const c = nodeColor(d);
+  return d.type === 'scheme' ? c : c + '30';
+}
+function nodeStroke(d)  { return d._noData ? '#30363d' : nodeColor(d); }
+function strokeDash(d)  { return d._noData ? '4,3' : 'none'; }
+
+// ── graph state ──────────────────────────────────────────────────────
+let graphNodes = [];
+let graphLinks = [];
+
+// caches — fetch once, reuse
+let cacheUtil   = null;  // /api/utilization?year=2024-25  → array
+let cacheTrails = {};    // state → /api/money-trail/{state}
+let cacheBlocks = {};    // "state/district" → /api/money-trail/{state}/{district}/blocks
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+// ── D3 setup ────────────────────────────────────────────────────────
+const svg    = d3.select('#map-svg');
+const W      = () => svg.node().clientWidth;
+const H      = () => svg.node().clientHeight;
+const zoomG  = svg.append('g');
+const linkG  = zoomG.append('g');
+const nodeG  = zoomG.append('g');
+
+const zoom = d3.zoom().scaleExtent([0.2, 4])
+  .on('zoom', e => zoomG.attr('transform', e.transform));
+svg.call(zoom);
+
+function resetZoom() {
+  svg.transition().duration(500)
+    .call(zoom.transform, d3.zoomIdentity.translate(W()/2, H()/2));
+}
+
+// link distance by node pair type
+function linkDist(l) {
+  const s = (l.source.type || ''), t = (l.target.type || '');
+  if (s==='scheme'   && t==='state')    return 170;
+  if (s==='state'    && t==='district') return 90;
+  if (s==='district' && t==='block')    return 55;
+  if (s==='block'    && t==='village')  return 35;
+  return 100;
+}
+
+const sim = d3.forceSimulation()
+  .force('link', d3.forceLink().id(d=>d.id).distance(linkDist).strength(0.6))
+  .force('charge', d3.forceManyBody().strength(d => {
+    const s = { scheme:-600, state:-200, district:-100, block:-55, village:-30 };
+    return s[d.type] || -80;
+  }))
+  .force('collide', d3.forceCollide().radius(d => nodeR(d)+18).strength(0.85))
+  .force('x', d3.forceX(0).strength(0.03))
+  .force('y', d3.forceY(0).strength(0.03))
+  .alphaDecay(0.022)
+  .on('tick', ticked);
+
+function drag(s) {
+  return d3.drag()
+    .on('start', (e,d) => { if(!e.active) s.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+    .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
+    .on('end',   (e,d) => { if(!e.active) s.alphaTarget(0); d.fx=null; d.fy=null; });
+}
+
+// ── D3 render update ────────────────────────────────────────────────
+function update() {
+  const linkKey = d => `${d.source.id||d.source}-${d.target.id||d.target}`;
+
+  linkG.selectAll('.link')
+    .data(graphLinks, linkKey)
+    .join(
+      e => e.append('line').attr('class','link').attr('opacity',0)
+            .call(s=>s.transition().duration(300).attr('opacity',0.5)),
+      u => u,
+      x => x.transition().duration(200).attr('opacity',0).remove()
+    );
+
+  nodeG.selectAll('.node')
+    .data(graphNodes, d => d.id)
+    .join(
+      enter => {
+        const g = enter.append('g').attr('class','node')
+          .attr('transform', d=>`translate(${d.x||0},${d.y||0})`)
+          .call(drag(sim))
+          .on('click', (evt,d) => { evt.stopPropagation(); onNodeClick(d); });
+
+        g.append('circle')
+          .attr('r', 0)
+          .attr('fill',         d => nodeFill(d))
+          .attr('stroke',       d => nodeStroke(d))
+          .attr('stroke-width', d => d._noData ? 1.5 : 2.5)
+          .attr('stroke-dasharray', d => strokeDash(d))
+          .transition().duration(400).attr('r', d => nodeR(d));
+
+        // label inside circle for scheme nodes
+        g.filter(d => d.type==='scheme')
+          .append('text')
+          .attr('font-size','9.5px').attr('font-weight','700')
+          .attr('fill', '#0d1117')
+          .text(d => d.name.length>14 ? d.name.slice(0,13)+'…' : d.name);
+
+        // label below for other nodes
+        g.filter(d => d.type!=='scheme')
+          .append('text')
+          .attr('y', d => nodeR(d)+12)
+          .attr('font-size', d => d.type==='state'?'10px':'9px')
+          .attr('fill','#c9d1d9')
+          .text(d => d.name.length>16 ? d.name.slice(0,15)+'…' : d.name);
+
+        // ⊘ overlay for no-data nodes
+        g.filter(d => d._noData)
+          .append('text').attr('class','nodata-sym')
+          .attr('font-size','11px').attr('fill','#636e72')
+          .attr('y', d => nodeR(d)+12+12)
+          .text('no data');
+
+        // expand-dot indicator
+        g.filter(d => d.type!=='user' && d.type!=='village')
+          .append('circle').attr('class','exp-dot')
+          .attr('cx', d=> nodeR(d)-2).attr('cy', d=>-(nodeR(d)-2))
+          .attr('r',4)
+          .attr('fill','#21262d').attr('stroke','#30363d').attr('stroke-width',1);
+
+        return g;
+      },
+      update => {
+        // refresh circle style (fill, stroke, dash change when _noData set)
+        update.select('circle')
+          .attr('fill',             d => nodeFill(d))
+          .attr('stroke',           d => nodeStroke(d))
+          .attr('stroke-dasharray', d => strokeDash(d));
+        // refresh expand dot colour
+        update.select('.exp-dot')
+          .attr('fill', d => d.expanded ? nodeColor(d) : '#21262d');
+        return update;
+      },
+      exit => exit.transition().duration(200).attr('opacity',0).remove()
+    );
+
+  sim.nodes(graphNodes);
+  sim.force('link').links(graphLinks);
+  sim.alpha(0.4).restart();
+}
+
+function ticked() {
+  linkG.selectAll('.link')
+    .attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+    .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+  nodeG.selectAll('.node').attr('transform',d=>`translate(${d.x},${d.y})`);
+  nodeG.selectAll('.exp-dot').attr('fill',d=>d.expanded?nodeColor(d):'#21262d');
+}
+
+// ── node click dispatcher ────────────────────────────────────────────
+async function onNodeClick(d) {
+  nodeG.selectAll('.node').classed('selected', n=>n.id===d.id);
+
+  if (d._noData) {
+    // already probed, nothing to expand — just show panel
+    showPanel(d);
+    return;
+  }
+  if (d.expanded) {
+    collapse(d);
+  } else {
+    await expand(d);
+  }
+  showPanel(d);
+}
+
+// ── expand dispatcher ────────────────────────────────────────────────
+async function expand(d) {
+  const fn = { scheme: expandScheme, state: expandState, district: expandDistrict, block: expandBlock };
+  if (fn[d.type]) await fn[d.type](d);
+}
+
+// expand scheme → states
+async function expandScheme(d) {
+  const states = (cacheUtil||[]).filter(r => r.scheme === d.name);
+  if (!states.length) { d._noData = true; update(); return; }
+  d.expanded = true;
+  states.forEach((s, i) => {
+    const id = `state|${d.name}|${s.state}`;
+    if (graphNodes.find(n=>n.id===id)) return;
+    const a = (2*Math.PI*i/states.length) - Math.PI/2;
+    graphNodes.push({ id, type:'state', name:s.state, expanded:false,
+      data: Object.assign({}, s, { _scheme:d.name }),
+      x: d.x + 160*Math.cos(a), y: d.y + 160*Math.sin(a) });
+    graphLinks.push({ source:d.id, target:id });
+  });
+  update();
+}
+
+// expand state → districts
+async function expandState(d) {
+  const scheme = d.data._scheme || d.data.scheme || 'NREGA';
+  const stateKey = d.name.toUpperCase();
+  // always try the API — money-trail returns NREGA districts if they exist, empty otherwise
+  if (!cacheTrails[stateKey]) {
+    try {
+      const resp = await fetchJSON(API + '/api/money-trail/' + encodeURIComponent(stateKey));
+      cacheTrails[stateKey] = resp.districts || [];
+    } catch(e) { cacheTrails[stateKey] = []; }
+  }
+  const districts = cacheTrails[stateKey];
+  if (!districts.length) { d._noData = true; update(); return; }
+  d.expanded = true;
+  districts.forEach((dist, i) => {
+    const id = `district|${stateKey}|${dist.entity_name}`;
+    if (graphNodes.find(n=>n.id===id)) return;
+    const a = (2*Math.PI*i/districts.length) - Math.PI/2;
+    graphNodes.push({ id, type:'district', name:dist.entity_name, expanded:false,
+      data: Object.assign({}, dist, { _scheme:scheme, _state:stateKey }),
+      x: d.x + 95*Math.cos(a), y: d.y + 95*Math.sin(a) });
+    graphLinks.push({ source:d.id, target:id });
+  });
+  update();
+}
+
+// expand district → blocks
+async function expandDistrict(d) {
+  const scheme = d.data._scheme || 'NREGA';
+  const state  = (d.data._state || d.data.state || 'RAJASTHAN').toUpperCase();
+  const distName = d.name.toUpperCase();
+  const cacheKey = `${state}/${distName}`;
+  if (!cacheBlocks[cacheKey]) {
+    try {
+      const resp = await fetchJSON(API + '/api/money-trail/' + encodeURIComponent(state) + '/' + encodeURIComponent(distName) + '/blocks');
+      cacheBlocks[cacheKey] = resp.blocks || [];
+    } catch(e) { cacheBlocks[cacheKey] = []; }
+  }
+  const blocks = cacheBlocks[cacheKey];
+  if (!blocks.length) { d._noData = true; update(); return; }
+  d.expanded = true;
+  blocks.forEach((b, i) => {
+    const id = `block|${state}|${distName}|${b.block_name || b.entity_name}`;
+    if (graphNodes.find(n=>n.id===id)) return;
+    const a = (2*Math.PI*i/blocks.length) - Math.PI/2;
+    graphNodes.push({ id, type:'block', name: b.block_name || b.entity_name, expanded:false,
+      data: Object.assign({}, b, { _scheme:scheme, _state:state, _district:distName }),
+      x: d.x + 60*Math.cos(a), y: d.y + 60*Math.sin(a) });
+    graphLinks.push({ source:d.id, target:id });
+  });
+  update();
+}
+
+// expand block → villages (no data yet)
+async function expandBlock(d) {
+  d._noData = true;
+  update();
+}
+
+// ── collapse: recursively remove children ────────────────────────────
+function collapse(d) {
+  d.expanded = false;
+  d._noData  = false; // allow retry after collapse
+  const childIds = graphLinks
+    .filter(l => (l.source.id||l.source) === d.id)
+    .map(l => l.target.id||l.target);
+  childIds.forEach(cid => {
+    const child = graphNodes.find(n=>n.id===cid);
+    if (child) collapse(child);
+  });
+  graphLinks = graphLinks.filter(l => (l.source.id||l.source) !== d.id);
+  graphNodes = graphNodes.filter(n => !childIds.includes(n.id));
+  update();
+}
+
+function collapseAll() {
+  graphNodes.filter(n=>n.type==='scheme' && n.expanded).forEach(collapse);
+}
+
+// ── right panel ──────────────────────────────────────────────────────
+function showPanel(d) {
+  const p = { scheme:renderSchemePanel, state:renderStatePanel, district:renderDistrictPanel, block:renderBlockPanel };
+  if (p[d.type]) p[d.type](d);
+}
+
+function setPanel(html) { document.getElementById('panel').innerHTML = html; }
+
+function fmtCr(v)  { return v!=null ? '₹'+Number(v).toLocaleString('en-IN')+' Cr' : '—'; }
+function fmtNum(v) { return v!=null ? Number(v).toLocaleString('en-IN') : '—'; }
+function fmtM(v)   {
+  if (!v) return '—';
+  if (v>=1e7) return (v/1e7).toFixed(1)+' Cr';
+  if (v>=1e5) return (v/1e5).toFixed(1)+' L';
+  return fmtNum(v);
+}
+function utilBar(pct, alloc, spent) {
+  if (!pct && alloc && spent) pct = Math.round(1000*spent/alloc)/10;
+  const c = pct ? utilColor(pct) : '#8892b0';
+  const w = Math.min(pct||0, 100);
+  return `<div class="util-wrap">
+    <div class="util-row"><span>Fund Utilization</span><span style="font-weight:700;color:${c}">${pct?pct.toFixed(1)+'%':'—'}</span></div>
+    <div class="util-track"><div class="util-fill" style="width:${w}%;background:${c}"></div></div>
+  </div>`;
+}
+function noDataBox(level, reason='') {
+  return `<div class="no-data-box">
+    <div class="nd-icon">📭</div>
+    <strong>No ${level}-level data available</strong><br>
+    ${reason || 'Data will appear here once scraped.'}
+  </div>`;
+}
+
+function renderSchemePanel(d) {
+  const s = d.data, c = schemeColor(d.name);
+  const gap = (s.total_allocated && s.total_spent) ? fmtCr(s.total_allocated - s.total_spent) : '—';
+  setPanel(`
+    <div style="margin-bottom:16px">
+      <div class="scheme-badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${s.name}</div>
+      <div class="panel-title">${s.name}</div>
+      <div class="panel-sub">${s.ministry}</div>
+      ${s.description?`<div class="panel-sub" style="margin-top:3px;font-style:italic">${s.description}</div>`:''}
+    </div>
+    <div class="sec-label">National Overview · FY 2024-25</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${fmtCr(s.total_allocated)}</div><div class="stat-lbl">Allocated</div></div>
+      <div class="stat-box"><div class="stat-val">${fmtCr(s.total_spent)}</div><div class="stat-lbl">Spent</div></div>
+      <div class="stat-box"><div class="stat-val red">${gap}</div><div class="stat-lbl">Fund Gap</div></div>
+      <div class="stat-box"><div class="stat-val">${fmtM(s.total_beneficiaries)}</div><div class="stat-lbl">Beneficiaries</div></div>
+    </div>
+    ${utilBar(s.utilization_pct, s.total_allocated, s.total_spent)}
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${s.state_count||0}</div><div class="stat-lbl">States in data</div></div>
+      ${s.website?`<div class="stat-box"><a href="${s.website}" target="_blank" style="color:#58a6ff;font-size:0.78em;word-break:break-all">${s.website}</a></div>`:''}
+    </div>
+    ${d._noData ? noDataBox('state', 'State-level financial data not available for this scheme in the current dataset.') : '<div class="expand-hint"><strong>↙ Click a state node</strong> to see state details</div>'}
+  `);
+}
+
+async function renderStatePanel(d) {
+  const s = d.data, schemeName = s._scheme || s.scheme;
+  const c = schemeColor(schemeName);
+  const gap = (s.allocated_cr && s.spent_cr) ? (s.allocated_cr - s.spent_cr) : null;
+
+  let officerHtml = '<div class="no-data-box" style="text-align:left"><small>Officer data not available for this scheme/state.</small></div>';
+  if (schemeName === 'NREGA' && d.name.toUpperCase() === 'RAJASTHAN') {
+    try {
+      const officers = await fetchJSON(API + '/api/officers?state=RAJASTHAN&level=state&scheme=NREGA');
+      officerHtml = officers.map(o=>`
+        <div class="officer-card">
+          <div class="officer-av">👤</div>
+          <div><div class="officer-name">${o.name}</div>
+          <div class="officer-role">${o.designation}</div>
+          <div class="officer-dept">${o.department||''}</div></div>
+        </div>`).join('') || officerHtml;
+    } catch(e) {}
+  }
+
+  // district summary if we have cached trail
+  const stateKey = d.name.toUpperCase();
+  let distSummary = '';
+  if (cacheTrails[stateKey] && cacheTrails[stateKey].length) {
+    const dists = cacheTrails[stateKey];
+    const totalExp = dists.reduce((a,x)=>a+(x.total_expenditure_lakh||0),0);
+    const avgUtil  = dists.filter(x=>x.utilization_pct).reduce((a,x,_,arr)=>a+x.utilization_pct/arr.length,0);
+    distSummary = `
+      <div class="sec-label">District Summary</div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-val">${dists.length}</div><div class="stat-lbl">Districts</div></div>
+        <div class="stat-box"><div class="stat-val">₹${(totalExp/100).toFixed(0)} Cr</div><div class="stat-lbl">Total Expenditure</div></div>
+        <div class="stat-box"><div class="stat-val">${avgUtil.toFixed(1)}%</div><div class="stat-lbl">Avg Utilization</div></div>
+        <div class="stat-box"><div class="stat-val">${dists.filter(x=>(x.utilization_pct||0)<60).length}</div><div class="stat-lbl">Districts &lt;60%</div></div>
+      </div>`;
+  }
+
+  const noDistMsg = d._noData
+    ? noDataBox('district', `District-level data is not yet available for <strong>${d.name}</strong> under <strong>${schemeName}</strong>. Currently only NREGA · Rajasthan has full district coverage.`)
+    : '';
+
+  setPanel(`
+    <div class="breadcrumb"><span class="bc-item">${schemeName}</span><span class="sep">›</span><span>${d.name}</span></div>
+    <div style="margin-bottom:14px">
+      <div class="scheme-badge" style="background:${c}22;color:${c};border:1px solid ${c}44">${schemeName}</div>
+      <div class="panel-title">${d.name}</div>
+      <div class="panel-sub">FY ${s.year||'2024-25'}</div>
+    </div>
+    <div class="sec-label">Financial Overview</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${fmtCr(s.allocated_cr)}</div><div class="stat-lbl">Allocated</div></div>
+      <div class="stat-box"><div class="stat-val">${fmtCr(s.spent_cr)}</div><div class="stat-lbl">Spent</div></div>
+      <div class="stat-box"><div class="stat-val red">${gap!=null?fmtCr(gap.toFixed(0)):'—'}</div><div class="stat-lbl">Fund Gap</div></div>
+      <div class="stat-box"><div class="stat-val">${fmtM(s.beneficiaries)}</div><div class="stat-lbl">Beneficiaries</div></div>
+    </div>
+    ${utilBar(s.utilization_pct, s.allocated_cr, s.spent_cr)}
+    <div class="sec-label">Responsible Officers</div>
+    ${officerHtml}
+    ${distSummary}
+    ${noDistMsg}
+    ${!d._noData && !distSummary ? '<div class="expand-hint"><strong>↙ Click a district node</strong> to drill down further</div>' : ''}
+  `);
+}
+
+async function renderDistrictPanel(d) {
+  const dd = d.data;
+  setPanel(`
+    <div class="breadcrumb">
+      <span class="bc-item">NREGA</span><span class="sep">›</span>
+      <span class="bc-item">${dd._state||'Rajasthan'}</span><span class="sep">›</span>
+      <span>${d.name}</span>
+    </div>
+    <div style="color:#8892b0;font-size:0.82em;padding:10px 0"><span class="spinner"></span>Loading details…</div>`);
+
+  let detail = {};
+  try {
+    const state = dd._state || 'RAJASTHAN';
+    detail = await fetchJSON(API + '/api/money-trail/' + encodeURIComponent(state) + '/' + encodeURIComponent(d.name));
+  } catch(e) {}
+
+  const di = detail.district || dd;
+  const util    = di.utilization_pct || (di.allocation_lakh && di.total_expenditure_lakh ? Math.round(1000*di.total_expenditure_lakh/di.allocation_lakh)/10 : null);
+  const unspent = di.allocation_lakh && di.total_expenditure_lakh ? di.allocation_lakh - di.total_expenditure_lakh : null;
+  const compPct = di.works_taken_up > 0 ? Math.round(1000*(di.works_completed||0)/di.works_taken_up)/10 : null;
+  const flags   = detail.red_flags || [];
+  const flagHtml = flags.length
+    ? flags.map(f=>`<span class="flag-badge flag-${f.severity}">⚑ ${f.type.replace(/_/g,' ')} — ${f.detail}</span>`).join('')
+    : '<span style="color:#3fb950;font-size:0.82em">✓ No red flags detected</span>';
+
+  const blockInfo = d._noData
+    ? noDataBox('block', 'Block-level data is pending. Run <code style="background:#21262d;padding:1px 5px;border-radius:3px">scrape_blocks.py</code> to populate it.')
+    : '<div class="expand-hint"><strong>↙ Click to expand blocks</strong></div>';
+
+  setPanel(`
+    <div class="breadcrumb">
+      <span class="bc-item">NREGA</span><span class="sep">›</span>
+      <span class="bc-item">${dd._state||'Rajasthan'}</span><span class="sep">›</span>
+      <span>${d.name}</span>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="scheme-badge" style="background:#ff6b6b22;color:#ff6b6b;border:1px solid #ff6b6b44">NREGA</div>
+      <div class="panel-title">${d.name}</div>
+      <div class="panel-sub">${dd._state||'Rajasthan'} · FY 2024-25</div>
+    </div>
+
+    <div class="sec-label">District Collector</div>
+    <div class="officer-card">
+      <div class="officer-av">🏛️</div>
+      <div>
+        <div class="officer-name">${di.officer_name||'—'}</div>
+        <div class="officer-role">District Collector / DM</div>
+        <div class="officer-dept">Accountable for NREGA implementation &amp; fund utilization</div>
+      </div>
+    </div>
+
+    <div class="sec-label">Fund Accountability</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">₹${di.allocation_lakh?(di.allocation_lakh/100).toFixed(0):'—'} Cr</div><div class="stat-lbl">Allocated</div></div>
+      <div class="stat-box"><div class="stat-val">₹${di.total_expenditure_lakh?(di.total_expenditure_lakh/100).toFixed(0):'—'} Cr</div><div class="stat-lbl">Spent</div></div>
+      <div class="stat-box"><div class="stat-val red">₹${unspent!=null?(unspent/100).toFixed(0):'—'} Cr</div><div class="stat-lbl">Unspent</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${util?utilColor(util):'#8892b0'}">${util!=null?util+'%':'—'}</div><div class="stat-lbl">Utilization</div></div>
+    </div>
+    ${utilBar(util, di.allocation_lakh, di.total_expenditure_lakh)}
+
+    <div class="sec-label">NREGA KPIs</div>
+    <ul class="kpi-list">
+      <li><span class="kpi-k">Households Worked</span><span class="kpi-v">${fmtNum(di.households_worked)}</span></li>
+      <li><span class="kpi-k">Person-Days</span><span class="kpi-v">${fmtNum(di.person_days)}</span></li>
+      <li><span class="kpi-k">Women Person-Days</span><span class="kpi-v">${di.women_person_days?fmtNum(di.women_person_days):'—'}</span></li>
+      <li><span class="kpi-k">Works Taken Up</span><span class="kpi-v">${fmtNum(di.works_taken_up)}</span></li>
+      <li><span class="kpi-k">Works Completed</span><span class="kpi-v">${fmtNum(di.works_completed)} ${compPct!=null?'<span style="color:#8892b0">('+compPct+'%)</span>':''}</span></li>
+      <li><span class="kpi-k">Avg Wage / Day</span><span class="kpi-v">${di.avg_wage_per_day?'₹'+di.avg_wage_per_day:'—'}</span></li>
+      <li><span class="kpi-k">HH Completed 100 Days</span><span class="kpi-v">${fmtNum(di.hh_completed_100_days)}</span></li>
+    </ul>
+
+    <div class="sec-label">Red Flags</div>
+    <div style="margin:4px 0">${flagHtml}</div>
+
+    <div class="sec-label">Block Level</div>
+    ${blockInfo}
+  `);
+}
+
+function renderBlockPanel(d) {
+  const b = d.data;
+  const blockInfo = d._noData
+    ? noDataBox('village', 'Village &amp; beneficiary data is pending. Block data needs to be scraped first.')
+    : '<div class="expand-hint"><strong>↙ Click to expand villages</strong></div>';
+
+  setPanel(`
+    <div class="breadcrumb">
+      <span class="bc-item">NREGA</span><span class="sep">›</span>
+      <span class="bc-item">${b._state||'Rajasthan'}</span><span class="sep">›</span>
+      <span class="bc-item">${b._district||''}</span><span class="sep">›</span>
+      <span>${d.name}</span>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="scheme-badge" style="background:#ff6b6b22;color:#ff6b6b;border:1px solid #ff6b6b44">NREGA · Block</div>
+      <div class="panel-title">${d.name}</div>
+      <div class="panel-sub">${b._district||''}, ${b._state||''}</div>
+    </div>
+
+    <div class="sec-label">Block Overview</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">₹${b.total_expenditure_lakh?(b.total_expenditure_lakh/100).toFixed(1):'—'} Cr</div><div class="stat-lbl">Expenditure</div></div>
+      <div class="stat-box"><div class="stat-val">${fmtNum(b.households_worked)}</div><div class="stat-lbl">HH Worked</div></div>
+      <div class="stat-box"><div class="stat-val">${fmtNum(b.person_days)}</div><div class="stat-lbl">Person-Days</div></div>
+      <div class="stat-box"><div class="stat-val">${b.avg_wage_per_day?'₹'+b.avg_wage_per_day:'—'}</div><div class="stat-lbl">Avg Wage</div></div>
+    </div>
+
+    <div class="sec-label">Village / Beneficiary Level</div>
+    ${blockInfo}
+  `);
+}
+
+// ── init ─────────────────────────────────────────────────────────────
+async function init() {
+  const [schemes, util] = await Promise.all([
+    fetchJSON(API + '/api/mindmap/schemes'),
+    fetchJSON(API + '/api/utilization?year=2024-25'),
+  ]);
+  cacheUtil = util.data;
+
+  const ringR = 220;
+  schemes.forEach((s, i) => {
+    const a = (2*Math.PI*i/schemes.length) - Math.PI/2;
+    graphNodes.push({ id:'scheme|'+s.name, type:'scheme', name:s.name, data:s, expanded:false,
+      x: ringR*Math.cos(a), y: ringR*Math.sin(a) });
+  });
+  update();
+  setTimeout(() => svg.call(zoom.transform, d3.zoomIdentity.translate(W()/2, H()/2+23).scale(0.82)), 120);
+}
+
+init();
+</script>
+</body>
+</html>
