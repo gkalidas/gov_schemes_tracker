@@ -76,7 +76,55 @@ def init_db():
         data_type TEXT,
         FOREIGN KEY(scheme_id) REFERENCES schemes(id)
     )''')
-    
+
+    c.execute('''CREATE TABLE IF NOT EXISTS news_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scheme TEXT NOT NULL,
+        level TEXT NOT NULL,
+        entity_name TEXT NOT NULL,
+        title TEXT,
+        url TEXT UNIQUE,
+        source_name TEXT,
+        source_type TEXT,
+        published_at TEXT,
+        snippet TEXT,
+        query_used TEXT,
+        fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_news_entity ON news_cache(scheme, level, entity_name)')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS social_cache (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        platform TEXT NOT NULL,
+        scheme TEXT NOT NULL,
+        level TEXT NOT NULL,
+        entity_name TEXT NOT NULL,
+        title TEXT,
+        url TEXT UNIQUE,
+        author TEXT,
+        score INTEGER,
+        comments INTEGER,
+        thumbnail_url TEXT,
+        published_at TEXT,
+        snippet TEXT,
+        fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_social_entity ON social_cache(platform, scheme, level, entity_name)')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS pmkisan_beneficiaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        state TEXT NOT NULL,
+        district TEXT NOT NULL,
+        sub_district TEXT NOT NULL,
+        village TEXT NOT NULL,
+        farmer_name TEXT,
+        father_name TEXT,
+        installments_received INTEGER,
+        scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(state, district, sub_district, village, farmer_name, father_name)
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_pmkisan_district ON pmkisan_beneficiaries(state, district)')
+
     conn.commit()
     conn.close()
 
@@ -628,6 +676,327 @@ def get_officers_query():
     rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return jsonify(rows)
+
+
+# District code map for direct nreganarep.nic.in district report URLs
+NREGA_DISTRICT_CODES = {
+    'AJMER': '2701', 'ALWAR': '2702', 'BANSWARA': '2703', 'BARAN': '2704',
+    'BARMER': '2705', 'BHARATPUR': '2706', 'BHILWARA': '2707', 'BIKANER': '2708',
+    'BUNDI': '2709', 'CHITTORGARH': '2710', 'CHURU': '2711', 'DAUSA': '2712',
+    'DHOLPUR': '2713', 'DUNGARPUR': '2714', 'HANUMANGARH': '2715', 'JAIPUR': '2716',
+    'JAISALMER': '2717', 'JALORE': '2718', 'JHALAWAR': '2719', 'JHUNJHUNU': '2720',
+    'JODHPUR': '2721', 'KARAULI': '2722', 'KOTA': '2723', 'NAGAUR': '2724',
+    'PALI': '2725', 'PRATAPGARH': '2736', 'RAJSAMAND': '2726',
+    'SAWAI MADHOPUR': '2727', 'SIKAR': '2728', 'SIROHI': '2729',
+    'SRI GANGANAGAR': '2730', 'TONK': '2731', 'UDAIPUR': '2732',
+}
+
+# Scheme-level official sources — only links verified to be reachable/useful
+# Note: nreganarep.nic.in has CAPTCHA for bots but works in a browser
+OFFICIAL_SOURCES = {
+    'NREGA': [
+        {
+            'name': 'NREGA MIS Portal (navigate in browser)',
+            'url': 'https://nrega.nic.in/netnrega/home.aspx',
+            'description': 'Main portal — go to Reports → State/District for live expenditure data. CAPTCHA blocks direct scraping.',
+        },
+        {
+            'name': 'CAG Audit — Rural Development',
+            'url': 'https://cag.gov.in/en/audit-report?sector=social&subsector=Rural+Development',
+            'description': 'Comptroller & Auditor General findings on MGNREGS fund misuse and irregularities',
+        },
+        {
+            'name': 'data.gov.in — NREGA search',
+            'url': 'https://data.gov.in/search?title=MGNREGA',
+            'description': 'Open data platform — downloadable CSVs for district/block level data',
+        },
+        {
+            'name': 'Ministry of Rural Development',
+            'url': 'https://rural.gov.in/en/publication-reports',
+            'description': 'Annual reports with state-wise allocation and scheme performance',
+        },
+    ],
+    'PM-JAY': [
+        {
+            'name': 'PM-JAY Dashboard',
+            'url': 'https://pmjay.gov.in',
+            'description': 'State-wise claims, beneficiaries, hospital empanelment data',
+        },
+        {
+            'name': 'CAG Audit — Health',
+            'url': 'https://cag.gov.in/en/audit-report?sector=social&subsector=Health',
+            'description': 'CAG findings on PM-JAY implementation and fund utilization',
+        },
+    ],
+    'PM-KISAN': [
+        {
+            'name': 'PM-KISAN Beneficiary Dashboard',
+            'url': 'https://pmkisan.gov.in/Dashboardnew.aspx',
+            'description': 'Live installment transfer stats and beneficiary count by state',
+        },
+        {
+            'name': 'PM-KISAN Beneficiary Status (State → Village)',
+            'url': 'https://pmkisan.gov.in/BeneficiaryStatus.aspx',
+            'description': 'The only scheme with public individual-level data — drill to village',
+        },
+    ],
+    'PMAY-U': [
+        {
+            'name': 'PMAY-U Progress Dashboard',
+            'url': 'https://pmaymis.gov.in/Public_FrmDashBoard.aspx',
+            'description': 'Houses sanctioned vs grounded vs completed by state',
+        },
+        {
+            'name': 'CAG Audit — Housing',
+            'url': 'https://cag.gov.in/en/audit-report?sector=social',
+            'description': 'CAG findings on PMAY-U fund utilization and beneficiary selection',
+        },
+    ],
+    'PM Ujjwala': [
+        {
+            'name': 'PM Ujjwala Portal',
+            'url': 'https://pmujjwala.gov.in',
+            'description': 'LPG connection data by state under PMUY 1.0 and 2.0',
+        },
+    ],
+    'Jal Jeevan Mission': [
+        {
+            'name': 'JJM District-wise Tap Connections',
+            'url': 'https://ejalshakti.gov.in/jjmreport/JJMIndia.aspx',
+            'description': 'Live: functional household tap connection % by district',
+        },
+        {
+            'name': 'JJM State Dashboard',
+            'url': 'https://ejalshakti.gov.in/jjmreport/JJMByState.aspx',
+            'description': 'State-level water supply coverage — the data source we scraped',
+        },
+    ],
+}
+
+
+@app.route('/api/refresh', methods=['POST'])
+def refresh_sources():
+    """On-demand fetch: pull latest news + social for a specific entity and update DB."""
+    entity = request.args.get('entity', '').upper().strip()
+    level  = request.args.get('level', 'district')
+    scheme = request.args.get('scheme', 'NREGA')
+
+    if not entity:
+        return jsonify({'error': 'entity is required'}), 400
+
+    import sys, os
+    sys.path.insert(0, os.path.dirname(__file__))
+
+    saved_news = 0
+    saved_social = 0
+
+    try:
+        import fetch_news as fn
+        fn.init_news_table()
+        if level == 'district':
+            saved_news = fn.fetch_for_district(entity, scheme)
+        else:
+            saved_news = fn.fetch_for_state(entity, scheme)
+    except Exception as e:
+        logger.error(f'refresh news error: {e}')
+
+    try:
+        import fetch_social as fs
+        fs.init_social_table()
+        from fetch_social import reddit_posts_for, save_posts
+        posts = reddit_posts_for(entity, scheme, level)
+        saved_social = save_posts(posts)
+    except Exception as e:
+        logger.error(f'refresh social error: {e}')
+
+    return jsonify({'entity': entity, 'level': level, 'scheme': scheme,
+                    'saved_news': saved_news, 'saved_social': saved_social})
+
+
+@app.route('/api/sources', methods=['GET'])
+def get_sources():
+    """Return official sources + cached news articles for a scheme/entity/level."""
+    entity = request.args.get('entity', '').upper().strip()
+    level  = request.args.get('level', 'district')
+    scheme = request.args.get('scheme', 'NREGA')
+
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    news = []
+    if entity:
+        c.execute('''SELECT title, url, source_name, source_type, published_at, snippet
+                     FROM news_cache
+                     WHERE UPPER(entity_name) = ? AND scheme = ? AND level = ?
+                     ORDER BY fetched_at DESC LIMIT 30''',
+                  (entity, scheme, level))
+        news = [dict(r) for r in c.fetchall()]
+
+    # Also include state-level news when viewing a district
+    state_news = []
+    if level == 'district':
+        c.execute('''SELECT title, url, source_name, source_type, published_at, snippet
+                     FROM news_cache
+                     WHERE level = 'state' AND scheme = ? AND UPPER(entity_name) = 'RAJASTHAN'
+                     ORDER BY fetched_at DESC LIMIT 10''',
+                  (scheme,))
+        state_news = [dict(r) for r in c.fetchall()]
+
+    conn.close()
+
+    all_news = news + [n for n in state_news if n['url'] not in {x['url'] for x in news}]
+
+    # Social media results
+    social = []
+    if entity:
+        conn2 = sqlite3.connect(DB_FILE)
+        conn2.row_factory = sqlite3.Row
+        c2 = conn2.cursor()
+        c2.execute('''SELECT platform, title, url, author, score, comments,
+                             thumbnail_url, published_at, snippet
+                      FROM social_cache
+                      WHERE UPPER(entity_name) = ? AND scheme = ? AND level = ?
+                      ORDER BY score DESC, fetched_at DESC LIMIT 20''',
+                   (entity, scheme, level))
+        social = [dict(r) for r in c2.fetchall()]
+        conn2.close()
+
+    official = list(OFFICIAL_SOURCES.get(scheme, []))  # copy; don't mutate the dict
+
+    # For a specific NREGA district, prepend a direct link to that district's live MIS report
+    if scheme == 'NREGA' and level == 'district' and entity in NREGA_DISTRICT_CODES:
+        code = NREGA_DISTRICT_CODES[entity]
+        direct_url = (
+            f'https://nreganarep.nic.in/netnrega/homestciti.aspx'
+            f'?state_code=27&state_name=RAJASTHAN'
+            f'&district_code={code}&district_name={entity}'
+        )
+        official = [{
+            'name': f'NREGA MIS — {entity.title()} District (Live)',
+            'url': direct_url,
+            'description': f'Direct link: live NREGA data for {entity.title()} — works, wages, households, person-days',
+        }] + official
+
+    return jsonify({
+        'entity': entity,
+        'level': level,
+        'scheme': scheme,
+        'official': official,
+        'national_news': [n for n in all_news if n['source_type'] == 'national_news'],
+        'local_news': [n for n in all_news if n['source_type'] == 'local_news'],
+        'social': social,
+        'total_articles': len(all_news),
+        'has_news': len(all_news) > 0,
+    })
+
+
+# ============ PM-KISAN BENEFICIARY ENDPOINTS ============
+
+@app.route('/api/pmkisan/summary', methods=['GET'])
+def pmkisan_summary():
+    """Total farmers + district breakdown from scraped data."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute('SELECT COUNT(*) as total FROM pmkisan_beneficiaries')
+    total = dict(c.fetchone())['total']
+    c.execute('''SELECT state, district,
+                        COUNT(*) as farmer_count,
+                        COUNT(DISTINCT village) as villages,
+                        COUNT(DISTINCT sub_district) as sub_districts,
+                        ROUND(AVG(installments_received), 1) as avg_installments
+                 FROM pmkisan_beneficiaries
+                 GROUP BY state, district
+                 ORDER BY farmer_count DESC''')
+    districts = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return jsonify({
+        'total_farmers': total,
+        'districts': districts,
+        'has_data': total > 0,
+    })
+
+
+@app.route('/api/pmkisan/villages', methods=['GET'])
+def pmkisan_villages():
+    """Villages (with farmer counts) for a state+district+sub_district."""
+    state       = request.args.get('state', 'RAJASTHAN')
+    district    = request.args.get('district', '')
+    sub_district = request.args.get('sub_district', '')
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    if sub_district:
+        c.execute('''SELECT sub_district, village, COUNT(*) as farmer_count
+                     FROM pmkisan_beneficiaries
+                     WHERE state=? AND district=? AND sub_district=?
+                     GROUP BY village ORDER BY village''',
+                  (state, district, sub_district))
+    elif district:
+        c.execute('''SELECT sub_district, COUNT(DISTINCT village) as villages,
+                            COUNT(*) as farmer_count
+                     FROM pmkisan_beneficiaries
+                     WHERE state=? AND district=?
+                     GROUP BY sub_district ORDER BY sub_district''',
+                  (state, district))
+    else:
+        c.execute('''SELECT district, COUNT(DISTINCT sub_district) as sub_districts,
+                            COUNT(DISTINCT village) as villages,
+                            COUNT(*) as farmer_count
+                     FROM pmkisan_beneficiaries
+                     WHERE state=?
+                     GROUP BY district ORDER BY farmer_count DESC''',
+                  (state,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return jsonify({'rows': rows, 'count': len(rows)})
+
+
+@app.route('/api/pmkisan/beneficiaries', methods=['GET'])
+def pmkisan_beneficiaries():
+    """Individual farmer list for a village (or district/sub-district)."""
+    state        = request.args.get('state', '')
+    district     = request.args.get('district', '')
+    sub_district = request.args.get('sub_district', '')
+    village      = request.args.get('village', '')
+    search       = request.args.get('search', '').strip()
+    limit        = min(int(request.args.get('limit', 200)), 500)
+
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    q = 'SELECT * FROM pmkisan_beneficiaries WHERE 1=1'
+    params = []
+    if state:        q += ' AND state=?';        params.append(state)
+    if district:     q += ' AND district=?';     params.append(district)
+    if sub_district: q += ' AND sub_district=?'; params.append(sub_district)
+    if village:      q += ' AND village=?';      params.append(village)
+    if search:
+        q += ' AND (farmer_name LIKE ? OR father_name LIKE ?)';
+        params += [f'%{search}%', f'%{search}%']
+    q += ' ORDER BY farmer_name LIMIT ?'
+    params.append(limit)
+
+    c.execute(q, params)
+    farmers = [dict(r) for r in c.fetchall()]
+
+    c.execute('SELECT COUNT(*) FROM pmkisan_beneficiaries WHERE 1=1' +
+              (' AND state=?' if state else '') +
+              (' AND district=?' if district else '') +
+              (' AND sub_district=?' if sub_district else '') +
+              (' AND village=?' if village else ''),
+              [p for p in [state, district, sub_district, village] if p])
+    total = c.fetchone()[0]
+    conn.close()
+
+    return jsonify({
+        'farmers': farmers,
+        'returned': len(farmers),
+        'total': total,
+        'limit': limit,
+    })
 
 
 if __name__ == '__main__':

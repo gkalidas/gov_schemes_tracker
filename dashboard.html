@@ -98,12 +98,104 @@ tr:hover { background: rgba(233,69,96,0.03); }
 .sort-btn { background: none; border: 1px solid #2a2a4a; color: #8892b0; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
 .sort-btn.active { border-color: #e94560; color: #e94560; }
 
+/* ===== SOURCES DRAWER ===== */
+.source-drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 100vw;
+  background: #12172b;
+  border-left: 1px solid #2a2a4a;
+  z-index: 500;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  display: flex;
+  flex-direction: column;
+}
+.source-drawer.open { transform: translateX(0); }
+
+.source-drawer-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid #2a2a4a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: #12172b;
+  z-index: 1;
+}
+.source-drawer-header h3 { color: #fff; font-size: 14px; font-weight: 600; }
+.source-close-btn {
+  background: none;
+  border: 1px solid #2a2a4a;
+  color: #8892b0;
+  width: 26px; height: 26px;
+  border-radius: 4px;
+  cursor: pointer; font-size: 13px; line-height: 1;
+}
+.source-close-btn:hover { color: #fff; border-color: #e94560; }
+
+.source-section { padding: 14px 20px; border-bottom: 1px solid #1e1e3a; }
+.source-section-title {
+  font-size: 10px;
+  color: #8892b0;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+.source-item { margin-bottom: 12px; }
+.source-item:last-child { margin-bottom: 0; }
+.source-item a {
+  color: #58a6ff;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  display: block;
+  line-height: 1.5;
+}
+.source-item a:hover { color: #e94560; text-decoration: underline; }
+.source-item .source-meta { font-size: 11px; color: #555; margin-top: 2px; }
+.source-item .source-snippet {
+  font-size: 11px; color: #8892b0;
+  margin-top: 4px; line-height: 1.5;
+  border-left: 2px solid #2a2a4a;
+  padding-left: 8px;
+}
+.source-empty { padding: 20px; color: #555; font-size: 12px; line-height: 1.7; }
+
+/* Sources button shown at each level */
+.sources-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.25);
+  color: #58a6ff;
+  padding: 3px 10px;
+  border-radius: 4px; font-size: 11px; cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.sources-btn:hover { background: rgba(88,166,255,0.18); border-color: #58a6ff; }
+
+/* Overlay to close drawer by clicking outside */
+.source-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 499;
+}
+.source-overlay.active { display: block; }
+
 @media (max-width: 768px) {
   .header h1 { font-size: 20px; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .tab { padding: 10px 14px; font-size: 12px; }
   table { font-size: 11px; }
   th, td { padding: 8px 6px; }
+  .source-drawer { width: 100vw; }
 }
 </style>
 </head>
@@ -122,6 +214,7 @@ tr:hover { background: rgba(233,69,96,0.03); }
   <div class="tab" onclick="switchTab('states')">🗺️ State-wise</div>
   <div class="tab" onclick="switchTab('moneytrail')">🔍 Money Trail</div>
   <div class="tab" onclick="switchTab('rankings')">🏆 Rankings</div>
+  <div class="tab" onclick="switchTab('pmkisan')">🌾 PM-KISAN</div>
   <a href="mindmap.html" style="margin-left:auto;padding:8px 16px;background:#21262d;border:1px solid #30363d;border-radius:6px;color:#58a6ff;font-size:0.82em;text-decoration:none;white-space:nowrap;align-self:center">🗺 Mind Map ↗</a>
 </div>
 
@@ -133,6 +226,21 @@ tr:hover { background: rgba(233,69,96,0.03); }
   Data Source: Government official dashboards | Self-hosted on your server | No external dependencies
 </div>
 
+<!-- Sources Drawer -->
+<div class="source-overlay" id="sourceOverlay" onclick="closeSourceDrawer()"></div>
+<div class="source-drawer" id="sourceDrawer">
+  <div class="source-drawer-header">
+    <h3 id="sourceDrawerTitle">📋 Sources</h3>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button id="sourceRefreshBtn" class="sources-btn" style="font-size:12px;padding:4px 10px;" onclick="refreshSources()">🔄 Refresh</button>
+      <button class="source-close-btn" onclick="closeSourceDrawer()">✕</button>
+    </div>
+  </div>
+  <div id="sourceDrawerContent">
+    <div class="source-empty">Loading sources…</div>
+  </div>
+</div>
+
 <script>
 const API = 'http://localhost:5000/api';
 let currentTab = 'overview';
@@ -142,7 +250,7 @@ let discrepancyData = [];
 let moneyTrailData = null;
 let redFlagsData = [];
 let trailSortKey = 'total_expenditure_lakh';
-const TAB_NAMES = ['overview','utilization','discrepancies','states','moneytrail','rankings'];
+const TAB_NAMES = ['overview','utilization','discrepancies','states','moneytrail','rankings','pmkisan'];
 let rankingsData = {};  // cached by metric
 
 function getBarColor(pct) {
@@ -209,6 +317,7 @@ function renderTab() {
   else if (currentTab === 'states') renderStates(el);
   else if (currentTab === 'moneytrail') renderMoneyTrail(el);
   else if (currentTab === 'rankings') renderRankings(el);
+  else if (currentTab === 'pmkisan') renderPmkisan(el);
 }
 
 function renderOverview(el) {
@@ -354,9 +463,12 @@ function renderMoneyTrail(el) {
     const officerLine = d.officer_name
       ? `<div class="dc-meta" style="margin-top:6px">👤 <span style="color:#e0e0e0">${d.officer_name}</span> <span style="color:#555">· DC & DPC</span></div>`
       : '';
-    return `<div class="district-card" onclick="renderDistrictDetail('${d.entity_name}')">
-      <div class="dc-name">${d.entity_name}</div>
-      <div class="dc-spend">${spend}</div>
+    return `<div class="district-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+        <div class="dc-name" style="cursor:pointer;margin-bottom:0" onclick="renderDistrictDetail('${d.entity_name}')">${d.entity_name}</div>
+        <button class="sources-btn" onclick="event.stopPropagation();openSources('district','NREGA','${d.entity_name}')">📋 Sources</button>
+      </div>
+      <div class="dc-spend" onclick="renderDistrictDetail('${d.entity_name}')" style="cursor:pointer">${spend}</div>
       <div class="dc-meta">${formatNum(d.households_worked)} households · ${wage} · ${days}</div>
       ${officerLine}
       <div class="completion-bar" style="margin-top:8px"><div class="completion-fill" style="width:${Math.min(comp,100)}%;background:${compColor}"></div></div>
@@ -373,16 +485,26 @@ function renderMoneyTrail(el) {
       <div class="trail-node">
         <div class="trail-icon" style="background:#1a1a2e;border:2px solid #e94560">🏛️</div>
         <div class="trail-body">
-          <div class="trail-title">Union Government — Ministry of Rural Development</div>
-          <div class="trail-sub">MGNREGA — National Programme</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="trail-title">Union Government — Ministry of Rural Development</div>
+              <div class="trail-sub">MGNREGA — National Programme</div>
+            </div>
+            <button class="sources-btn" onclick="openSources('national','NREGA','')">📋 Sources</button>
+          </div>
           ${officerNames(centreOfficers)}
         </div>
       </div>
       <div class="trail-node">
         <div class="trail-icon" style="background:#1a1a2e;border:2px solid #3498db">📍</div>
         <div class="trail-body">
-          <div class="trail-title">Rajasthan State Government</div>
-          <div class="trail-sub">33 Districts · Data from nrega.nic.in via data.gov.in</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="trail-title">Rajasthan State Government</div>
+              <div class="trail-sub">33 Districts · Data from nrega.nic.in via data.gov.in</div>
+            </div>
+            <button class="sources-btn" onclick="openSources('state','NREGA','RAJASTHAN')">📋 Sources</button>
+          </div>
           ${officerNames(stateOfficers)}
           <div class="trail-stats">
             <div class="trail-stat">Total Spend: <span>₹${totalSpend} Cr</span></div>
@@ -481,9 +603,12 @@ async function renderDistrictDetail(districtName) {
   const st_pct = d.st_person_days && d.person_days ? (100*d.st_person_days/d.person_days).toFixed(1) : '—';
 
   el.innerHTML = `
-    <button class="back-btn" onclick="switchTab('moneytrail')">← Back to Rajasthan</button>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+      <button class="back-btn" style="margin-bottom:0" onclick="switchTab('moneytrail')">← Back to Rajasthan</button>
+      <button class="sources-btn" onclick="openSources('district','NREGA','${districtName}')">📋 Sources</button>
+    </div>
 
-    <h2 style="color:#fff;margin-bottom:4px">🏘️ ${districtName}, Rajasthan</h2>
+    <h2 style="color:#fff;margin-bottom:4px;margin-top:16px">🏘️ ${districtName}, Rajasthan</h2>
     <p style="color:#8892b0;font-size:13px;margin-bottom:12px">NREGA 2025-26 · Source: nrega.nic.in via data.gov.in</p>
 
     ${d.officer_name ? `<div class="trail-body" style="margin-bottom:20px;border-left:3px solid #e94560">
@@ -708,6 +833,353 @@ function switchRankMetric(metric) {
   activeRankMetric = metric;
   renderRankings(document.getElementById('content'));
 }
+
+// ============ PM-KISAN BENEFICIARY DRILL-DOWN ============
+
+let pmkisanPath = {};  // { district, sub_district, village }
+
+async function renderPmkisan(el) {
+  el.innerHTML = '<div class="loading">Loading PM-KISAN data…</div>';
+  const summary = await fetchJSON(API + '/pmkisan/summary');
+
+  if (!summary || !summary.has_data) {
+    el.innerHTML = `
+      <h2 style="color:#fff;margin-bottom:8px">🌾 PM-KISAN Beneficiary Drill-Down</h2>
+      <div class="card">
+        <p style="color:#8892b0;margin-bottom:12px">
+          No beneficiary data scraped yet. PM-KISAN is the <strong style="color:#fff">only scheme</strong>
+          where individual farmer names + payment status are publicly available.
+        </p>
+        <p style="color:#8892b0;font-size:13px;margin-bottom:16px">
+          Run the scraper to populate:
+        </p>
+        <code style="display:block;background:#0f1117;padding:12px;border-radius:4px;color:#2ecc71;font-size:13px;line-height:1.8">
+          source ~/envs/evn_gov_schemes/bin/activate<br>
+          python3 scrape_pmkisan.py --discover              # check portal structure<br>
+          python3 scrape_pmkisan.py --district UDAIPUR       # one district first<br>
+          python3 scrape_pmkisan.py --state RAJASTHAN        # full state (~hours)
+        </code>
+      </div>`;
+    return;
+  }
+
+  pmkisanPath = {};
+  renderPmkisanDistricts(el, summary);
+}
+
+function renderPmkisanDistricts(el, summary) {
+  const totalFarmers = summary.total_farmers.toLocaleString('en-IN');
+  const distCards = summary.districts.map(d => `
+    <div class="district-card" style="cursor:pointer" onclick="drillPmkisanDistrict('${d.state}','${d.district}')">
+      <div class="dc-name">${d.district}</div>
+      <div class="dc-spend" style="font-size:20px">${d.farmer_count.toLocaleString('en-IN')}</div>
+      <div class="dc-meta">farmers · ${d.villages} villages · ${d.sub_districts} blocks</div>
+      ${d.avg_installments ? `<div class="dc-meta" style="margin-top:4px;color:#2ecc71">Avg installments received: ${d.avg_installments}</div>` : ''}
+    </div>`).join('');
+
+  el.innerHTML = `
+    <h2 style="color:#fff;margin-bottom:4px">🌾 PM-KISAN Beneficiary Drill-Down</h2>
+    <p style="color:#8892b0;font-size:13px;margin-bottom:4px">
+      Individual farmer data from <a href="https://pmkisan.gov.in" target="_blank" style="color:#58a6ff">pmkisan.gov.in</a> —
+      the only scheme with public user-level data.
+    </p>
+    <p style="color:#555;font-size:12px;margin-bottom:20px">
+      ${totalFarmers} farmers across ${summary.districts.length} districts
+    </p>
+    <div class="district-grid">${distCards}</div>`;
+}
+
+async function drillPmkisanDistrict(state, district) {
+  pmkisanPath = { state, district };
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Loading sub-districts…</div>';
+
+  const data = await fetchJSON(`${API}/pmkisan/villages?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}`);
+  if (!data || !data.rows.length) {
+    el.innerHTML = pmkisanBreadcrumb() + '<div class="card"><p style="color:#8892b0">No data for ' + district + '</p></div>';
+    return;
+  }
+
+  const rows = data.rows.map(r => `
+    <tr style="cursor:pointer" onclick="drillPmkisanSubdistrict('${state}','${district}','${r.sub_district.replace(/'/g,"\\'")}')">
+      <td style="color:#e0e0e0;font-weight:600">${r.sub_district}</td>
+      <td style="color:#2ecc71;font-weight:700">${(r.farmer_count||0).toLocaleString('en-IN')}</td>
+      <td style="color:#8892b0">${r.villages || '—'}</td>
+    </tr>`).join('');
+
+  el.innerHTML = pmkisanBreadcrumb() + `
+    <h3 style="color:#fff;margin-bottom:16px">📍 ${district} — Sub-districts</h3>
+    <div class="card">
+      <table>
+        <thead><tr><th>Sub-district / Block</th><th>Farmers</th><th>Villages</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function drillPmkisanSubdistrict(state, district, sub_district) {
+  pmkisanPath = { state, district, sub_district };
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Loading villages…</div>';
+
+  const data = await fetchJSON(
+    `${API}/pmkisan/villages?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}&sub_district=${encodeURIComponent(sub_district)}`
+  );
+  if (!data || !data.rows.length) {
+    el.innerHTML = pmkisanBreadcrumb() + '<div class="card"><p style="color:#8892b0">No villages found.</p></div>';
+    return;
+  }
+
+  const rows = data.rows.map(r => `
+    <tr style="cursor:pointer" onclick="drillPmkisanVillage('${state}','${district}','${sub_district.replace(/'/g,"\\'")}','${r.village.replace(/'/g,"\\'")}')">
+      <td style="color:#e0e0e0;font-weight:600">🏡 ${r.village}</td>
+      <td style="color:#2ecc71;font-weight:700">${(r.farmer_count||0).toLocaleString('en-IN')}</td>
+    </tr>`).join('');
+
+  el.innerHTML = pmkisanBreadcrumb() + `
+    <h3 style="color:#fff;margin-bottom:16px">🏘️ ${sub_district} — Villages</h3>
+    <div class="card">
+      <table>
+        <thead><tr><th>Village</th><th>Farmers</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+async function drillPmkisanVillage(state, district, sub_district, village) {
+  pmkisanPath = { state, district, sub_district, village };
+  const el = document.getElementById('content');
+  el.innerHTML = '<div class="loading">Loading farmers…</div>';
+
+  const data = await fetchJSON(
+    `${API}/pmkisan/beneficiaries?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}&sub_district=${encodeURIComponent(sub_district)}&village=${encodeURIComponent(village)}`
+  );
+  if (!data) {
+    el.innerHTML = pmkisanBreadcrumb() + '<div class="card"><p style="color:#8892b0">Failed to load.</p></div>';
+    return;
+  }
+
+  const rows = data.farmers.map((f, i) => `
+    <tr>
+      <td style="color:#555;font-size:12px">${i + 1}</td>
+      <td style="color:#e0e0e0;font-weight:600">${f.farmer_name}</td>
+      <td style="color:#8892b0">${f.father_name || '—'}</td>
+      <td style="color:${(f.installments_received||0) >= 14 ? '#2ecc71' : '#f39c12'};font-weight:600">${f.installments_received ?? '—'}</td>
+    </tr>`).join('');
+
+  const note = data.total > data.returned
+    ? `<p style="color:#555;font-size:12px;margin-top:8px">Showing ${data.returned} of ${data.total.toLocaleString('en-IN')} farmers</p>`
+    : '';
+
+  el.innerHTML = pmkisanBreadcrumb() + `
+    <h3 style="color:#fff;margin-bottom:4px">🏡 ${village}</h3>
+    <p style="color:#8892b0;font-size:13px;margin-bottom:16px">${data.total.toLocaleString('en-IN')} farmers · PM-KISAN beneficiaries</p>
+    <div class="card">
+      <table>
+        <thead><tr><th>#</th><th>Farmer Name</th><th>Father / Spouse</th><th>Installments Received</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${note}
+    </div>`;
+}
+
+function pmkisanBreadcrumb() {
+  const p = pmkisanPath;
+  const crumbs = [
+    `<span style="cursor:pointer;color:#58a6ff" onclick="switchTab('pmkisan')">🌾 PM-KISAN</span>`,
+  ];
+  if (p.district) crumbs.push(`<span style="cursor:pointer;color:#58a6ff" onclick="drillPmkisanDistrict('${p.state}','${p.district}')">${p.district}</span>`);
+  if (p.sub_district) crumbs.push(`<span style="cursor:pointer;color:#58a6ff" onclick="drillPmkisanSubdistrict('${p.state}','${p.district}','${p.sub_district}')">${p.sub_district}</span>`);
+  if (p.village) crumbs.push(`<span style="color:#e0e0e0">${p.village}</span>`);
+
+  return `<div style="margin-bottom:20px;font-size:13px;color:#8892b0">
+    ${crumbs.join(' <span style="color:#2a2a4a">›</span> ')}
+  </div>`;
+}
+
+// ============ END PM-KISAN ============
+
+// ============ SOURCES DRAWER ============
+
+let _sourceCtx = { level: null, scheme: null, entity: null };
+
+function openSources(level, scheme, entity) {
+  _sourceCtx = { level, scheme, entity };
+  const drawer = document.getElementById('sourceDrawer');
+  const overlay = document.getElementById('sourceOverlay');
+  drawer.classList.add('open');
+  overlay.classList.add('active');
+
+  const label = entity ? `📋 Sources — ${entity}` : `📋 Sources — ${scheme}`;
+  document.getElementById('sourceDrawerTitle').textContent = label;
+  _loadSources();
+}
+
+function _loadSources() {
+  const { level, scheme, entity } = _sourceCtx;
+  document.getElementById('sourceDrawerContent').innerHTML = '<div class="source-empty">Loading sources…</div>';
+  const params = new URLSearchParams({ level, scheme });
+  if (entity) params.append('entity', entity);
+  fetchJSON(API + '/sources?' + params.toString()).then(data => {
+    if (!data) {
+      document.getElementById('sourceDrawerContent').innerHTML = '<div class="source-empty">Failed to load sources. Is the backend running?</div>';
+      return;
+    }
+    renderSourceDrawer(data, entity, scheme);
+  });
+}
+
+function refreshSources() {
+  const { level, scheme, entity } = _sourceCtx;
+  if (!entity) return;
+  const btn = document.getElementById('sourceRefreshBtn');
+  btn.textContent = '⏳ Fetching…';
+  btn.disabled = true;
+  const params = new URLSearchParams({ level, scheme, entity });
+  fetch(API + '/refresh?' + params.toString(), { method: 'POST' })
+    .then(r => r.json())
+    .then(result => {
+      btn.textContent = `✅ +${result.saved_news + result.saved_social} new`;
+      btn.disabled = false;
+      setTimeout(() => { btn.textContent = '🔄 Refresh'; }, 3000);
+      _loadSources();
+    })
+    .catch(() => {
+      btn.textContent = '❌ Failed';
+      btn.disabled = false;
+      setTimeout(() => { btn.textContent = '🔄 Refresh'; }, 3000);
+    });
+}
+
+function closeSourceDrawer() {
+  document.getElementById('sourceDrawer').classList.remove('open');
+  document.getElementById('sourceOverlay').classList.remove('active');
+}
+
+function formatPubDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const days = Math.floor((Date.now() - d) / 86400000);
+    if (days === 0) return 'today';
+    if (days === 1) return 'yesterday';
+    if (days < 7) return days + 'd ago';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+  } catch (e) { return ''; }
+}
+
+function renderSourceDrawer(data, entity, scheme) {
+  const el = document.getElementById('sourceDrawerContent');
+  let html = '';
+
+  // Official sources
+  if (data.official && data.official.length) {
+    html += `<div class="source-section">
+      <div class="source-section-title">📋 Official Government Sources</div>
+      ${data.official.map(s => `
+        <div class="source-item">
+          <a href="${s.url}" target="_blank" rel="noopener">${s.name} ↗</a>
+          <div class="source-meta">${s.description}</div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // National news
+  if (data.national_news && data.national_news.length) {
+    html += `<div class="source-section">
+      <div class="source-section-title">📰 National News (${data.national_news.length})</div>
+      ${data.national_news.map(a => `
+        <div class="source-item">
+          <a href="${a.url}" target="_blank" rel="noopener">${a.title} ↗</a>
+          <div class="source-meta">${a.source_name}${a.published_at ? ' · ' + formatPubDate(a.published_at) : ''}</div>
+          ${a.snippet ? `<div class="source-snippet">${a.snippet.substring(0, 140)}…</div>` : ''}
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // Local / regional news
+  if (data.local_news && data.local_news.length) {
+    html += `<div class="source-section">
+      <div class="source-section-title">🗞️ Local / Regional News (${data.local_news.length})</div>
+      ${data.local_news.map(a => `
+        <div class="source-item">
+          <a href="${a.url}" target="_blank" rel="noopener">${a.title} ↗</a>
+          <div class="source-meta">${a.source_name}${a.published_at ? ' · ' + formatPubDate(a.published_at) : ''}</div>
+          ${a.snippet ? `<div class="source-snippet">${a.snippet.substring(0, 120)}…</div>` : ''}
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // Empty news state — show how to fetch
+  if (!data.has_news) {
+    const cmd = entity
+      ? `python3 fetch_news.py --district ${entity}`
+      : `python3 fetch_news.py`;
+    html += `<div class="source-section">
+      <div class="source-section-title">📰 News Articles</div>
+      <div class="source-empty" style="padding:0">
+        No news cached yet for ${entity || scheme}.<br>
+        Run to fetch: <code style="color:#e94560">${cmd}</code>
+      </div>
+    </div>`;
+  }
+
+  // Reddit
+  const reddit = (data.social || []).filter(p => p.platform === 'reddit');
+  if (reddit.length) {
+    html += `<div class="source-section">
+      <div class="source-section-title">🟠 Reddit (${reddit.length})</div>
+      ${reddit.map(p => `
+        <div class="source-item">
+          <a href="${p.url}" target="_blank" rel="noopener">${p.title} ↗</a>
+          <div class="source-meta">
+            ${p.author} · ${formatPubDate(p.published_at)}
+            <span style="color:#ff6314;margin-left:8px">▲ ${p.score}</span>
+            <span style="color:#8892b0;margin-left:6px">💬 ${p.comments}</span>
+          </div>
+          ${p.snippet ? `<div class="source-snippet">${p.snippet.substring(0,120)}…</div>` : ''}
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // YouTube
+  const youtube = (data.social || []).filter(p => p.platform === 'youtube');
+  if (youtube.length) {
+    html += `<div class="source-section">
+      <div class="source-section-title">▶️ YouTube (${youtube.length})</div>
+      ${youtube.map(p => `
+        <div class="source-item" style="display:flex;gap:10px;align-items:flex-start">
+          ${p.thumbnail_url ? `<a href="${p.url}" target="_blank" rel="noopener" style="flex-shrink:0"><img src="${p.thumbnail_url}" style="width:80px;height:45px;border-radius:3px;object-fit:cover;border:1px solid #2a2a4a" loading="lazy"></a>` : ''}
+          <div style="min-width:0">
+            <a href="${p.url}" target="_blank" rel="noopener">${p.title} ↗</a>
+            <div class="source-meta">${p.author} · ${formatPubDate(p.published_at)}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // No social data yet
+  if (!reddit.length && !youtube.length) {
+    const cmd = entity ? `python3 fetch_social.py --district ${entity}` : `python3 fetch_social.py`;
+    html += `<div class="source-section">
+      <div class="source-section-title">📱 Social Media</div>
+      <div class="source-empty" style="padding:0">
+        No social posts cached yet.<br>
+        Reddit (free): <code style="color:#e94560">${cmd}</code><br>
+        YouTube (needs key): <code style="color:#e94560">${cmd} --youtube --key YOUR_KEY</code><br>
+        <span style="color:#444;font-size:11px">Instagram: Meta API requires business approval — not supported.</span>
+      </div>
+    </div>`;
+  } else {
+    html += `<div class="source-section" style="padding:10px 20px">
+      <div style="color:#444;font-size:11px">Instagram: Meta API requires business account approval.</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ============ END SOURCES DRAWER ============
 
 // Load everything on page load
 loadAllData();
