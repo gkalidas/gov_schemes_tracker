@@ -4,6 +4,7 @@ from flask_cors import CORS
 import sqlite3, requests
 from bs4 import BeautifulSoup
 import json, threading, time, logging
+import background_scraper
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -333,6 +334,7 @@ def init_default_schemes():
     conn.close()
 
 init_default_schemes()
+background_scraper.start(db_file=DB_FILE)
 
 """
 MONEY TRAIL API ENDPOINTS
@@ -999,12 +1001,17 @@ def pmkisan_beneficiaries():
     })
 
 
+@app.route('/api/scraper/status', methods=['GET'])
+def scraper_status():
+    return jsonify(background_scraper.queue_status())
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("Government Scheme Transparency Tracker - Backend Server")
     print("=" * 60)
     print(f"Database: {DB_FILE}")
-    print("Crawler: Running in background (every 6 hours)")
+    print("Background scraper: running (resumes automatically on restart)")
     print("Starting Flask API server on http://localhost:5000")
     print("=" * 60)
     app.run(host='0.0.0.0', port=5000, debug=False)

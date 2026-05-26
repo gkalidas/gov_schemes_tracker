@@ -127,9 +127,9 @@ def parse_value(text):
     except ValueError:
         return None
 
-def scrape_district(district_slug):
-    """Scrape MGNREGA data for one district from DeshSeva"""
-    url = f"https://deshseva.in/tools/mgnrega/rajasthan/{district_slug}"
+def scrape_district_for_state(state_slug, district_slug):
+    """Scrape MGNREGA data for one district in any state from DeshSeva."""
+    url = f"https://deshseva.in/tools/mgnrega/{state_slug}/{district_slug}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
     }
@@ -138,15 +138,14 @@ def scrape_district(district_slug):
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
     except Exception as e:
-        print(f"  ❌ Failed to fetch {district_slug}: {e}")
+        print(f"  ❌ Failed to fetch {state_slug}/{district_slug}: {e}")
         return None
 
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    # Find the data table
     table = soup.find('table')
     if not table:
-        print(f"  ❌ No table found for {district_slug}")
+        print(f"  ❌ No table found for {state_slug}/{district_slug}")
         return None
 
     data = {}
@@ -159,10 +158,10 @@ def scrape_district(district_slug):
             data[key] = value
 
     if not data:
-        print(f"  ❌ No data parsed for {district_slug}")
+        print(f"  ❌ No data parsed for {state_slug}/{district_slug}")
         return None
 
-    # Map scraped fields to our schema
+    state_name    = state_slug.upper().replace('-', ' ')
     district_name = district_slug.upper().replace('-', ' ')
 
     result = {
@@ -170,8 +169,8 @@ def scrape_district(district_slug):
         'year': data.get('period (financial year)', '2025-2026'),
         'level': 'district',
         'entity_name': district_name,
-        'parent_entity': 'RAJASTHAN',
-        'state': 'RAJASTHAN',
+        'parent_entity': state_name,
+        'state': state_name,
         'district_code': str(parse_value(data.get('district code', '')) or ''),
         'report_month': data.get('month (as reported)', ''),
 
@@ -205,6 +204,11 @@ def scrape_district(district_slug):
     }
 
     return result
+
+
+def scrape_district(district_slug):
+    """Backwards-compatible wrapper — scrapes Rajasthan only."""
+    return scrape_district_for_state('rajasthan', district_slug)
 
 
 def save_district_data(data):
