@@ -199,11 +199,15 @@ _RUNNERS = {
 # ── engine ────────────────────────────────────────────────────────────────────
 
 class BackgroundScraper(threading.Thread):
-    def __init__(self):
+    def __init__(self, startup_delay=120):
         super().__init__(daemon=True, name='background-scraper')
-        self._stop = threading.Event()
+        self._stop          = threading.Event()
+        self._startup_delay = startup_delay
 
     def run(self):
+        if self._startup_delay > 0:
+            logger.info('[scraper] Waiting %ds before first job.', self._startup_delay)
+            self._stop.wait(self._startup_delay)
         logger.info('[scraper] Started.')
         while not self._stop.is_set():
             job = self._claim_next()
@@ -284,15 +288,15 @@ class BackgroundScraper(threading.Thread):
 
 _instance = None
 
-def start(db_file=None):
+def start(db_file=None, startup_delay=120):
     global _instance, DB_FILE
     if db_file:
         DB_FILE = db_file
     init_queue()
     seed_jobs()
-    _instance = BackgroundScraper()
+    _instance = BackgroundScraper(startup_delay=startup_delay)
     _instance.start()
-    logger.info('[scraper] Background scraper running.')
+    logger.info('[scraper] Background scraper running (first job in %ds).', startup_delay)
     return _instance
 
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import sqlite3, requests
 from bs4 import BeautifulSoup
-import json, threading, time, logging
+import json, threading, time, logging, os
 import background_scraper
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1004,6 +1006,15 @@ def pmkisan_beneficiaries():
 @app.route('/api/scraper/status', methods=['GET'])
 def scraper_status():
     return jsonify(background_scraper.queue_status())
+
+
+@app.route('/')
+def index():
+    return send_from_directory(BASE_DIR, 'dashboard.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(BASE_DIR, filename)
 
 
 if __name__ == '__main__':
