@@ -4,9 +4,12 @@ Other files import from this module — never define DB_FILE or timing
 constants elsewhere.
 
 Environment variable overrides (useful for deployment):
-  DB_FILE          path to SQLite database
-  PORT             Flask port
-  YOUTUBE_API_KEY  Google Data API v3 key (optional — YouTube is skipped if empty)
+  DB_FILE              path to SQLite database
+  PORT                 Flask port
+  YOUTUBE_API_KEY      Google Data API v3 key (optional — YouTube skipped if empty)
+  DATA_GOV_API_KEY     data.gov.in API key — get one free at https://data.gov.in/user/register
+                       Required for official NREGA data + cross-verification.
+                       Without it, cross-verification jobs are skipped gracefully.
 """
 import os
 
@@ -20,7 +23,8 @@ PORT = int(os.getenv('PORT', 5000))
 
 # ── api keys ──────────────────────────────────────────────────────────────────
 
-YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '')
+YOUTUBE_API_KEY  = os.getenv('YOUTUBE_API_KEY',  '')
+DATA_GOV_API_KEY = os.getenv('DATA_GOV_API_KEY', '')
 
 # ── social fetcher ────────────────────────────────────────────────────────────
 
@@ -44,4 +48,8 @@ DOMAIN_DELAYS = {
     'news.google.com': 5,
     'reddit.com':      15,
     'pmkisan.gov.in':  10,
+    'api.data.gov.in': 3,
 }
+
+# Tolerance for cross-verification: differences within this % are ignored.
+VERIFY_TOLERANCE_PCT = 5.0

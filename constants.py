@@ -6,10 +6,12 @@ because its type doesn't match any runner).
 
 # ── scraper job types ─────────────────────────────────────────────────────────
 
-JOB_NREGA_DISTRICT = 'nrega_district'
-JOB_NEWS_REFRESH   = 'news_refresh'
-JOB_SOCIAL_REFRESH = 'social_refresh'
-JOB_PMKISAN_STATE  = 'pmkisan_state'
+JOB_NREGA_DISTRICT  = 'nrega_district'
+JOB_NEWS_REFRESH    = 'news_refresh'
+JOB_SOCIAL_REFRESH  = 'social_refresh'
+JOB_PMKISAN_STATE   = 'pmkisan_state'
+JOB_DATAGOV_FETCH   = 'datagov_fetch'    # pull official NREGA data from data.gov.in
+JOB_DATAGOV_VERIFY  = 'datagov_verify'   # cross-verify our data against official data
 
 # ── scraper job statuses ──────────────────────────────────────────────────────
 
@@ -34,4 +36,6 @@ JOB_DOMAIN = {
     JOB_NEWS_REFRESH:   'news.google.com',
     JOB_SOCIAL_REFRESH: 'reddit.com',
     JOB_PMKISAN_STATE:  'pmkisan.gov.in',
+    JOB_DATAGOV_FETCH:  'api.data.gov.in',
+    JOB_DATAGOV_VERIFY: 'api.data.gov.in',
 }

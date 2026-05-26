@@ -75,6 +75,10 @@ def seed_jobs():
     for state in states.PMKISAN_STATES:
         enqueue(constants.JOB_PMKISAN_STATE, {'state': state}, 4)
 
+    # Official data fetch + cross-verify (only meaningful if API key is set)
+    enqueue(constants.JOB_DATAGOV_FETCH,  {}, 2)
+    enqueue(constants.JOB_DATAGOV_VERIFY, {}, 3)
+
     conn.commit()
     conn.close()
     logger.info('[scraper] Queue seeded.')
@@ -119,11 +123,25 @@ def _run_pmkisan_state(params):
     sp.scrape(target_state=params['state'], resume=True, workers=1)
 
 
+def _run_datagov_fetch(_params):
+    import fetch_datagov as fd
+    if not config.DATA_GOV_API_KEY:
+        raise RuntimeError('DATA_GOV_API_KEY not set — skipping datagov_fetch')
+    fd.fetch()
+
+
+def _run_datagov_verify(_params):
+    import fetch_datagov as fd
+    fd.verify()
+
+
 _RUNNERS = {
-    constants.JOB_NREGA_DISTRICT: _run_nrega_district,
-    constants.JOB_NEWS_REFRESH:   _run_news_refresh,
-    constants.JOB_SOCIAL_REFRESH: _run_social_refresh,
-    constants.JOB_PMKISAN_STATE:  _run_pmkisan_state,
+    constants.JOB_NREGA_DISTRICT:  _run_nrega_district,
+    constants.JOB_NEWS_REFRESH:    _run_news_refresh,
+    constants.JOB_SOCIAL_REFRESH:  _run_social_refresh,
+    constants.JOB_PMKISAN_STATE:   _run_pmkisan_state,
+    constants.JOB_DATAGOV_FETCH:   _run_datagov_fetch,
+    constants.JOB_DATAGOV_VERIFY:  _run_datagov_verify,
 }
 
 # ── engine ────────────────────────────────────────────────────────────────────

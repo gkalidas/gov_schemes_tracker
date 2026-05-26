@@ -1008,6 +1008,24 @@ def scraper_status():
     return jsonify(background_scraper.queue_status())
 
 
+@app.route('/api/data-quality', methods=['GET'])
+def data_quality():
+    """Discrepancies found between our scraped data and data.gov.in official data."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute('''SELECT d.*, s.name as scheme_name
+                 FROM discrepancies d
+                 LEFT JOIN schemes s ON d.scheme_id = s.id
+                 WHERE d.discrepancy_type LIKE 'data_mismatch%'
+                 ORDER BY d.severity DESC, d.detected_at DESC''')
+    rows = [dict(r) for r in c.fetchall()]
+    c.execute("SELECT COUNT(*) FROM discrepancies WHERE discrepancy_type LIKE 'data_mismatch%'")
+    total = c.fetchone()[0]
+    conn.close()
+    return jsonify({'total': total, 'discrepancies': rows})
+
+
 @app.route('/')
 def index():
     return send_from_directory(BASE_DIR, 'dashboard.html')
