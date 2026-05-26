@@ -12,7 +12,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 NOTIFIED_WAGE = 266  # Rajasthan 2025-26 notified wage (₹/day)
 
 DISTRICT_SLUGS = [

@@ -32,9 +32,7 @@ def _print(*args, **kwargs):
     with _print_lock:
         print(*args, **kwargs)
 
-DB_FILE = 'scheme_tracker.db'
-
-REDDIT_SUBREDDITS = ['india', 'IndianPolitics', 'indianews', 'MGNREGA', 'Rajasthan']
+from config import DB_FILE, REDDIT_SUBREDDITS, YOUTUBE_API_KEY
 YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search'
 
 RAJASTHAN_DISTRICTS = [

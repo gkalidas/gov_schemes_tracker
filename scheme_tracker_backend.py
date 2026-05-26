@@ -5,6 +5,7 @@ import sqlite3, requests
 from bs4 import BeautifulSoup
 import json, threading, time, logging, os
 import background_scraper
+from config import DB_FILE, PORT
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -14,12 +15,11 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-DB_FILE = 'scheme_tracker.db'
-
 def init_db():
     conn = sqlite3.connect(DB_FILE)
+    conn.execute('PRAGMA journal_mode=WAL')
     c = conn.cursor()
-    
+
     c.execute('''CREATE TABLE IF NOT EXISTS schemes (
         id INTEGER PRIMARY KEY,
         name TEXT UNIQUE,
@@ -1023,6 +1023,6 @@ if __name__ == '__main__':
     print("=" * 60)
     print(f"Database: {DB_FILE}")
     print("Background scraper: running (resumes automatically on restart)")
-    print("Starting Flask API server on http://localhost:5000")
+    print(f"Starting Flask API server on http://localhost:{PORT}")
     print("=" * 60)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=PORT, debug=False)

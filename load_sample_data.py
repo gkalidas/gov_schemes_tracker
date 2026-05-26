@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sqlite3
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 
 SAMPLE_DATA = [
     ('PM-JAY', 'Andhra Pradesh', 2024, 450, 420, 350, 2500000, 'pmjay.gov.in'),

@@ -18,7 +18,7 @@ import sys
 import argparse
 from playwright.sync_api import sync_playwright
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 
 # District code map — matches fund_flow.entity_name to nrega district code
 DISTRICT_CODES = {

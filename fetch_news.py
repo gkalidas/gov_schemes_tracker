@@ -27,7 +27,7 @@ def _print(*args, **kwargs):
     with _print_lock:
         print(*args, **kwargs)
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 
 NATIONAL_DOMAINS = {
     'thehindu.com', 'timesofindia.com', 'ndtv.com', 'indianexpress.com',

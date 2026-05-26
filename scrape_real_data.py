@@ -19,7 +19,7 @@ import re
 import json
 from datetime import datetime
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 
 # All Rajasthan districts from DeshSeva
 RAJASTHAN_DISTRICTS = [

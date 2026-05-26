@@ -19,7 +19,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 PORTAL_URL = 'https://pmkisan.gov.in/Rpt_BeneficiaryStatus_pub.aspx'
 
 _db_lock    = threading.Lock()

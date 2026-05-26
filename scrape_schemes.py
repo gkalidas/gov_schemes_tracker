@@ -16,7 +16,7 @@ import json
 import re
 from playwright.sync_api import sync_playwright
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 YEAR = '2024-25'
 
 

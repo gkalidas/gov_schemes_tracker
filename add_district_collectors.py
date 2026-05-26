@@ -6,7 +6,7 @@ Postings as of early 2025 — re-run to update after transfers.
 
 import sqlite3
 
-DB_FILE = 'scheme_tracker.db'
+from config import DB_FILE
 VERIFIED_DATE = '2025-01'  # month these postings were last verified
 
 # (district_name_in_db, collector_name, designation, source_url)
