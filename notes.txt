@@ -1,1 +1,16 @@
 notes.txt
+
+## How to start the servers
+
+Activate venv first (both terminals):
+  source ~/envs/evn_gov_schemes/bin/activate
+
+Terminal 1 — Flask API (port 5000):
+  python3 scheme_tracker_backend.py
+
+Terminal 2 — Frontend (port 3000):
+  python3 -m http.server 3000
+
+Open in browser:
+  http://localhost:3000/dashboard.html
+  http://localhost:3000/mindmap.html

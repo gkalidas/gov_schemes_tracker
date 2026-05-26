@@ -11,13 +11,16 @@ Track where public money goes — from Union Budget allocation down to the Distr
 | File | Purpose |
 |---|---|
 | `scheme_tracker_backend.py` | Flask API server (port 5000) |
-| `dashboard.html` | Main dashboard — Overview, Fund Utilization, Red Flags, Money Trail, Rankings |
+| `dashboard.html` | Main dashboard — Overview, Fund Utilization, Red Flags, Money Trail, Rankings, PM-KISAN |
 | `mindmap.html` | Interactive force-directed mind map — drill from scheme → state → district → block |
 | `scheme_tracker.db` | SQLite database with real scraped data |
 | `scrape_schemes.py` | Scrapes JJM, PM-KISAN, PMAY-U, PM-JAY, PM Ujjwala from govt portals |
 | `scrape_real_data.py` | Scrapes NREGA district data for all 33 Rajasthan districts |
+| `scrape_pmkisan.py` | PM-KISAN beneficiary scraper — State → District → Sub-district → Village → Farmer |
 | `scrape_blocks.py` | Block-level NREGA scraper (ready — awaiting portal access) |
 | `fetch_labour_budget.py` | Fetches approved labour budget (person-days → ₹ allocation) |
+| `fetch_news.py` | Google News RSS fetcher — scheme + district/state news, cached in DB |
+| `fetch_social.py` | Reddit + YouTube fetcher — social sentiment per scheme/district |
 | `add_district_collectors.py` | Loads District Collector names for all 33 Rajasthan districts |
 
 ## Schemes tracked
@@ -26,7 +29,7 @@ Track where public money goes — from Union Budget allocation down to the Distr
 |---|---|---|
 | NREGA | Rural Development | State → 33 Rajasthan districts (with DC names) |
 | PM-JAY | Health & Family Welfare | 20 states |
-| PM-KISAN | Agriculture | 20 states |
+| PM-KISAN | Agriculture | 20 states + district → sub-district → village → individual farmer |
 | PMAY-U | Housing & Urban Affairs | 20 states |
 | PM Ujjwala | Petroleum & Natural Gas | 20 states |
 | Jal Jeevan Mission | Jal Shakti | 34 states (coverage % + tap connections) |
@@ -39,7 +42,7 @@ Track where public money goes — from Union Budget allocation down to the Distr
 
 ```bash
 git clone <repo-url>
-cd gov_scheme
+cd gov_schemes_tracker
 ```
 
 ### 2. Create and activate virtual environment
@@ -97,7 +100,16 @@ python3 scrape_schemes.py
 # District Collector names
 python3 add_district_collectors.py
 
-# Single district test
+# PM-KISAN beneficiaries — full drill-down to individual farmers
+python3 scrape_pmkisan.py
+python3 scrape_pmkisan.py --resume        # resume an interrupted run
+python3 scrape_pmkisan.py --workers 4     # parallel sub-district scrapers
+
+# News and social (cached in DB, also refreshable live from the dashboard)
+python3 fetch_news.py
+python3 fetch_social.py
+
+# Single district block test
 python3 scrape_blocks.py --district UDAIPUR
 ```
 
@@ -116,3 +128,5 @@ python3 scrape_blocks.py --district UDAIPUR
 | `GET /api/red-flags` | Auto-detected anomalies |
 | `GET /api/mindmap/schemes` | Scheme aggregates for mind map |
 | `GET /api/officers?state=RAJASTHAN&level=state` | Officer lookup |
+| `GET /api/sources?entity=<name>&level=<union\|state\|district>` | Official links + cached news + social for any entity |
+| `POST /api/refresh` | Fetch live news + Reddit for any entity on demand |
